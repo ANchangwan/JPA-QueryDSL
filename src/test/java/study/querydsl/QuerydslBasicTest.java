@@ -1,6 +1,7 @@
 package study.querydsl;
 
 
+import com.querydsl.core.QueryResults;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import org.assertj.core.api.Assertions;
@@ -106,6 +107,34 @@ public class QuerydslBasicTest {
         assertThat(member5.getUsername()).isEqualTo("member5");
         assertThat(member6.getUsername()).isEqualTo("member6");
         assertThat(memberNull.getUsername()).isNull();
+
+    }
+    @Test
+    public void paging1(){
+        List<Member> list = queryFactory
+                .selectFrom(member)
+                .orderBy(member.username.desc())
+                .offset(1)
+                .limit(2)
+                .fetch();
+
+        assertThat(list).hasSize(2);
+
+    }
+
+    @Test
+    public void paging2(){
+        QueryResults<Member> list = queryFactory
+                .selectFrom(member)
+                .orderBy(member.username.desc())
+                .offset(1)
+                .limit(2)
+                .fetchResults();
+
+        assertThat(list.getTotal()).isEqualTo(4);
+        assertThat(list.getLimit()).isEqualTo(2);
+        assertThat(list.getOffset()).isEqualTo(1);
+        assertThat(list.getResults()).hasSize(2);
 
     }
 }
