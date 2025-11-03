@@ -2,6 +2,7 @@ package study.querydsl;
 
 
 import com.querydsl.core.QueryResults;
+import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import org.assertj.core.api.Assertions;
@@ -20,6 +21,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static study.querydsl.entity.QMember.*;
+import static study.querydsl.entity.QTeam.team;
 
 @SpringBootTest
 @Transactional
@@ -30,7 +32,7 @@ public class QuerydslBasicTest {
     JPAQueryFactory queryFactory;
 
     @BeforeEach
-    void before(){
+    void before() {
         Team teamA = new Team("teamA");
         Team teamB = new Team("teamB");
         em.persist(teamA);
@@ -51,17 +53,18 @@ public class QuerydslBasicTest {
     }
 
     @Test
-    public void startJPQL(){
+    public void startJPQL() {
         Member member = em.createQuery("select m " +
-                "from Member m" +
-                " where m.username = :username", Member.class)
+                        "from Member m" +
+                        " where m.username = :username", Member.class)
                 .setParameter("username", "member1")
                 .getSingleResult();
 
         assertThat(member.getUsername()).isEqualTo("member1");
     }
+
     @Test
-    public void startQuerydsl(){
+    public void startQuerydsl() {
         queryFactory = new JPAQueryFactory(em);
 
         Member findMember = queryFactory
@@ -71,9 +74,10 @@ public class QuerydslBasicTest {
 
         assertThat(findMember.getUsername()).isEqualTo("member1");
     }
+
     @Test
-    public void search(){
-       Member findMember = queryFactory
+    public void search() {
+        Member findMember = queryFactory
                 .selectFrom(member)
                 .where(
                         member.username.eq("member1"),
@@ -83,6 +87,7 @@ public class QuerydslBasicTest {
 
         assertThat(findMember.getUsername()).isEqualTo("member1");
     }
+
     /*
     회원 정렬 순서
     1. 회원 나이 내림차순(desc)
@@ -90,7 +95,7 @@ public class QuerydslBasicTest {
     단, 2에서 회원 이름이 없으면 마지막에 출력(nulls last)
      */
     @Test
-    public void sort(){
+    public void sort() {
         em.persist(new Member(null, 100));
         em.persist(new Member("member5", 100));
         em.persist(new Member("member6", 100));
@@ -109,8 +114,9 @@ public class QuerydslBasicTest {
         assertThat(memberNull.getUsername()).isNull();
 
     }
+
     @Test
-    public void paging1(){
+    public void paging1() {
         List<Member> list = queryFactory
                 .selectFrom(member)
                 .orderBy(member.username.desc())
@@ -123,7 +129,7 @@ public class QuerydslBasicTest {
     }
 
     @Test
-    public void paging2(){
+    public void paging2() {
         QueryResults<Member> list = queryFactory
                 .selectFrom(member)
                 .orderBy(member.username.desc())
@@ -136,5 +142,35 @@ public class QuerydslBasicTest {
         assertThat(list.getOffset()).isEqualTo(1);
         assertThat(list.getResults()).hasSize(2);
 
+    }
+
+    @Test
+    public void aggregation() {
+        List<Tuple> result = queryFactory.
+                select(
+                        member.count(),
+                        member.age.sum(),
+                        member.age.max(),
+                        member.age.min(),
+                        member.age.avg()
+                ).from(member)
+                .fetch();
+        Tuple tuple = result.get(0);
+        assertThat(tuple.get(member.count())).isEqualTo(4);
+    }
+
+    @Test
+    public void group(){
+        List<Tuple> result = queryFactory.select(team.name, member.age.avg())
+                .from(member)
+                .join(member.team, team)
+                .groupBy(team.name)
+                .fetch();
+
+        Tuple teamA = result.get(0);
+        Tuple teamB = result.get(1);
+
+        assertThat(teamA.get(team.name)).isEqualTo("teamA");
+        assertThat(teamA.get(member.age.avg())).isEqualTo(15);
     }
 }
