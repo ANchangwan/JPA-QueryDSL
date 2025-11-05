@@ -38,6 +38,7 @@ public class Member {
 
 
 
+
     public void changeTeam(Team team) {
         this.team = team;
         team.getMembers().add(this);

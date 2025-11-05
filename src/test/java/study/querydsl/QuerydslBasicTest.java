@@ -1,24 +1,35 @@
 package study.querydsl;
 
 
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.Predicate;
+import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import jakarta.persistence.Column;
 import jakarta.persistence.EntityManager;
-import org.assertj.core.api.Assertions;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Bean;
+import org.springframework.test.annotation.Commit;
 import org.springframework.transaction.annotation.Transactional;
+import study.querydsl.dto.MemberDto;
+import study.querydsl.dto.MemberSearchCondition;
+import study.querydsl.dto.MemberTeamDto;
+import study.querydsl.dto.QMemberTeamDto;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
 import study.querydsl.entity.Team;
+import study.querydsl.repository.MemberJpaRepostiory;
 
 
 import java.util.List;
 
+import static com.querydsl.jpa.JPAExpressions.*;
 import static org.assertj.core.api.Assertions.*;
 import static study.querydsl.entity.QMember.*;
 import static study.querydsl.entity.QTeam.team;
@@ -31,8 +42,13 @@ public class QuerydslBasicTest {
 
     JPAQueryFactory queryFactory;
 
+    @Autowired
+    MemberJpaRepostiory memberJpaRepository;
+
     @BeforeEach
     void before() {
+        queryFactory = new JPAQueryFactory(em);
+
         Team teamA = new Team("teamA");
         Team teamB = new Team("teamB");
         em.persist(teamA);
@@ -49,8 +65,9 @@ public class QuerydslBasicTest {
         em.flush();
         em.clear();
 
-        queryFactory = new JPAQueryFactory(em);
+
     }
+
 
     @Test
     public void startJPQL() {
@@ -158,7 +175,9 @@ public class QuerydslBasicTest {
         Tuple tuple = result.get(0);
         assertThat(tuple.get(member.count())).isEqualTo(4);
     }
-
+    /*
+    팀의 이름과 각 팀의 평균 연령을 구해라
+     */
     @Test
     public void group(){
         List<Tuple> result = queryFactory.select(team.name, member.age.avg())
@@ -173,4 +192,217 @@ public class QuerydslBasicTest {
         assertThat(teamA.get(team.name)).isEqualTo("teamA");
         assertThat(teamA.get(member.age.avg())).isEqualTo(15);
     }
+    @Test
+    public void join(){
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .leftJoin(member.team, team)
+                .where(team.name.eq("teamA"))
+                .fetch();
+
+        assertThat(result)
+                .extracting("username")
+                .containsExactly("member1", "member2");
+    }
+    @Test
+    public void theta_join(){
+
+        List<Member> result = queryFactory
+                .select(member)
+                        .from(member, team)
+                                .where(member.username.eq(team.name))
+                                        .fetch();
+
+        assertThat(result)
+                .extracting("username")
+                .containsExactly("teamA", "teamB");
+    }
+    /*
+    예) 회원과 팀을 조인하면서, 팀 이름이 teamA인 팀만 조인, 회원은 모두 조회
+    jpql : select m,t from member left join m.team t on t.name = "TeamA"
+     */
+    @Test
+    public void join_on_filtering(){
+        List<Tuple> result = queryFactory
+                .select(member, team)
+                .from(member)
+                .leftJoin(member.team, team)
+                .on(team.name.eq("teamA"))
+                .fetch();
+
+        for(Tuple tuple : result){
+            System.out.println("tuple: " + tuple);
+        }
+    }
+    @PersistenceUnit
+    EntityManagerFactory emf;
+
+    @Test
+    void beforeFetchJoin(){
+        em.flush();
+        em.clear();
+        Member  findMember = queryFactory
+                .selectFrom(member)
+                .where(member.username.eq("member1"))
+                .fetchOne();
+
+        boolean loaded = emf.getPersistenceUnitUtil().isLoaded(findMember.getTeam());
+        assertThat(loaded).as("페치 조인 미적용").isFalse();
+    }
+
+    @Test
+    void afterFetchJoin(){
+        em.flush();
+        em.clear();
+
+        Member findMember = queryFactory
+                .selectFrom(member)
+                .join(member.team, team).fetchJoin()
+                .where(member.username.eq("member1"))
+                .fetchOne();
+
+        boolean loaded = emf.getPersistenceUnitUtil().isLoaded(findMember.getTeam());
+        assertThat(loaded).as("페치 조인 적용").isTrue();
+    }
+    @Test
+    void findGratestAge(){
+
+        QMember memberSub
+                = new QMember("memberSub");
+        List<Member> findMember = queryFactory.
+                selectFrom(member)
+                .where(member.age.eq(select(memberSub.member.age.max())
+                        .from(memberSub.member)
+                )).fetch();
+
+        assertThat(findMember).extracting("age").containsExactly(40);
+    }
+    @Test
+    public void simpleProjection(){
+        List<String> result = queryFactory.select(member.username)
+                .from(member)
+                .fetch();
+
+        for(String s : result){
+            System.out.println("username : "+ s);
+        }
+    }
+
+    @Test
+    public void findDtoBySetter(){
+        List<MemberDto> result = queryFactory
+                .select(Projections.bean(MemberDto.class, member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for(MemberDto memberDto : result){
+            System.out.println("memberDto : " + memberDto);
+        }
+    }
+    @Test
+    public void findDtoByField(){
+        List<MemberDto> result = queryFactory
+                .select(Projections.fields(MemberDto.class, member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for(MemberDto memberDto : result){
+            System.out.println("memberDto : " + memberDto);
+        }
+    }
+
+    @Test
+    public void findDtoByConstructor(){
+        List<MemberDto> result = queryFactory
+                .select(Projections.constructor(MemberDto.class, member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for(MemberDto memberDto : result){
+            System.out.println("memberDto : " + memberDto);
+        }
+    }
+
+    @Test
+    public void 동적_쿼리(){
+        String username = "member1";
+        Integer age = 10;
+
+        List<Member> result = searchMember(username,age);
+        assertThat(result.size()).isEqualTo(1);
+    }
+
+    private List<Member> searchMember(String username, Integer age) {
+        BooleanBuilder booleanBuilder = new BooleanBuilder();
+        if(username != null){
+            booleanBuilder.and(member.username.eq(username));
+        }
+        if(age != null){
+            booleanBuilder.and(member.age.eq(age));
+        }
+        return queryFactory.selectFrom(member)
+                .where(booleanBuilder)
+                .fetch();
+    }
+
+    @Test
+    public void 동적_쿼리2(){
+        String username = "member1";
+        Integer age = 10;
+
+        List<Member> result = searchMember2(username,age);
+        assertThat(result.size()).isEqualTo(1);
+    }
+
+    private List<Member> searchMember2(String username, Integer age) {
+        return queryFactory
+                .selectFrom(member)
+                .where(usernameEq(username), ageEq(age))
+                .fetch();
+    }
+
+    private Predicate ageEq(Integer age) {
+        return age != null ? member.age.eq(age) : null;
+    }
+
+    private Predicate usernameEq(String username) {
+        return username != null ? member.username.eq(username) : null;
+    }
+
+    @Test
+    @Commit
+    public void updateAndDelete(){
+        long result = queryFactory
+                .update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(26))
+                .execute();
+
+        System.out.println("result : " + result);
+    }
+    @Test
+    @Commit
+    public void findDtoByQeuryProjection(){
+
+        Team teamA = new Team("teamA");
+        Team teamB = new Team("teamB");
+        em.persist(teamA);
+        em.persist(teamB);
+        Member member1 = new Member("member1", 10, teamA);
+        Member member2 = new Member("member2", 20, teamA);
+        Member member3 = new Member("member3", 30, teamB);
+        Member member4 = new Member("member4", 40, teamB);
+        em.persist(member1);
+        em.persist(member2);
+        em.persist(member3);
+        em.persist(member4);
+        MemberSearchCondition condition = new MemberSearchCondition();
+        condition.setAgeGoe(35);
+        condition.setAgeLoe(40);
+        condition.setTeamName("teamB");
+        List<MemberTeamDto> result = memberJpaRepository.search(condition);
+        assertThat(result).extracting("username").containsExactly("member4","member4");
+    }
+
+
 }
