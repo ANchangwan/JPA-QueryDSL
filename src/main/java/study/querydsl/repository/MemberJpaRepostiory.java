@@ -6,6 +6,7 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 import study.querydsl.dto.MemberSearchCondition;
 import study.querydsl.dto.MemberTeamDto;
@@ -121,10 +122,11 @@ public class MemberJpaRepostiory {
     private BooleanExpression teamNameEq(String teamName) {
         return isEmpty(teamName) ? null : team.name.eq(teamName);
     }
-
+    //null 반환 시 where에서 자동 무시 가능
     private BooleanExpression usernameEq(String username) {
         return isEmpty(username) ? null : member.username.eq(username);
     }
+
 
 
 }
