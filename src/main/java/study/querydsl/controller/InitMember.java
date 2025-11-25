@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.Team;
 
-@Profile("local")
+//@Profile("local")
 @Component
 @RequiredArgsConstructor
 public class InitMember {

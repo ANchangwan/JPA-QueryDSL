@@ -25,9 +25,13 @@ import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
 import study.querydsl.entity.Team;
 import study.querydsl.repository.MemberJpaRepostiory;
+import study.querydsl.repository.MemberRepository;
 
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.querydsl.jpa.JPAExpressions.*;
 import static org.assertj.core.api.Assertions.*;
@@ -44,6 +48,9 @@ public class QuerydslBasicTest {
 
     @Autowired
     MemberJpaRepostiory memberJpaRepository;
+
+    @Autowired
+    MemberRepository memberRepository;
 
     @BeforeEach
     void before() {
@@ -402,6 +409,18 @@ public class QuerydslBasicTest {
         condition.setTeamName("teamB");
         List<MemberTeamDto> result = memberJpaRepository.search(condition);
         assertThat(result).extracting("username").containsExactly("member4","member4");
+    }
+
+    @Test
+    public void findAll(){
+        List<Member> membersList = memberRepository.findAll();
+        System.out.println(membersList);
+        List<MemberDto> memberDtos = membersList.stream()
+                .map(o -> new MemberDto(o.getUsername(), o.getAge()))
+                .collect(Collectors.toList());
+        Map<String, Object> result = new HashMap<>();
+        result.put("members", memberDtos);
+        System.out.println(result);
     }
 
 

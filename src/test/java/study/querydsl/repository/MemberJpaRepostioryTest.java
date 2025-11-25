@@ -22,6 +22,9 @@ class MemberJpaRepostioryTest {
     @Autowired
     MemberJpaRepostiory memberJpaRepostiory;
 
+    @Autowired
+    MemberRepository memberRepository;
+
     @Test
     public void basicTest(){
         Member member = new Member("member1", 10);
@@ -37,6 +40,18 @@ class MemberJpaRepostioryTest {
         assertThat(result2).containsExactly(member);
     }
 
+    @Test
+    public void findAll(){
+        List<Member> list = memberRepository.findAll();
+
+
+        for (Member member : list) {
+            System.out.println("memberList : " + member.getUsername());
+        }
+        assertThat(list).isNotNull();
+        System.out.println("list size = " + list.size());
+        assertThat(list.size()).isEqualTo(4);
+    }
 
 
 }
